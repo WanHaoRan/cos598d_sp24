@@ -141,12 +141,9 @@ def train(args, train_dataset, model, tokenizer):
                 ##################################################
                 # TODO(cos598d): perform backward pass here
                 loss.backward()
-                ##################################################
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-            
                 # Gather data to rank=0 node
-                model_params = model.parameters()
-                for param in model_params:
+                for param in model.parameters():
+                    print(param.grad)
                     tensor_to_send = copy.deepcopy(param.grad)
                     if args.local_rank == 0:
                         tensor_list = [torch.empty(tensor_to_send.shape) for i in range(torch.distributed.get_world_size())]
@@ -165,6 +162,9 @@ def train(args, train_dataset, model, tokenizer):
                         torch.distributed.scatter(param, scatter_list=[], src=0, group=None)
                     
                     param.grad.copy_(tensor_to_recv)
+                    print(param.grad)
+                ##################################################
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                     
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
