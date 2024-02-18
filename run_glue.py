@@ -157,7 +157,7 @@ def train(args, train_dataset, model, tokenizer):
                     tensor_to_recv = torch.empty(param.grad.shape)
 
                     if args.local_rank == 0:
-                        new_grad = torch.mean(tensor_list)
+                        new_grad = torch.mean(torch.stack([tensor_list[i] for i in range(torch.distributed.get_world_size())], dim=0), dim=0, keepdim=False)
                         tensor_to_recv = copy.deepcopy(new_grad)
                         tensor_list = [tensor_to_recv for i in range(torch.distributed.get_world_size())]
                         torch.distributed.scatter(tensor_to_recv, tensor_list, src=0)
@@ -166,7 +166,6 @@ def train(args, train_dataset, model, tokenizer):
                     
                     param.grad.copy_(tensor_to_recv)
                     
-
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 scheduler.step()  # Update learning rate schedule
@@ -197,7 +196,7 @@ def train(args, train_dataset, model, tokenizer):
     logger.info("***** Finished training *****")
     logger.info("Total number of steps: %d", len(time_each_iteration)+1)
     logger.info("Average time for each step: %f", np.mean(time_each_iteration))
-    
+
     return global_step, tr_loss / global_step
 
 
