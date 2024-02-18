@@ -161,7 +161,7 @@ def train(args, train_dataset, model, tokenizer):
                     else:
                         torch.distributed.scatter(param, scatter_list=[], src=0, group=None)
                     
-                    param.grad.copy_(tensor_to_recv)
+                    param.grad = tensor_to_recv
                     print(param.grad)
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
