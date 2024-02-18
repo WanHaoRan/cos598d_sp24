@@ -139,11 +139,12 @@ def train(args, train_dataset, model, tokenizer):
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
             
-            tensor_to_send = torch.tensor([args.local_rank], dtype=torch.float32)
+            # Gather data to rank=0 node
+            tensor_to_send = model.parameters().grad
+            print(tensor_to_send.shape)
             if args.local_rank == 0:
-                tensor_list = [torch.empty(1) for i in range(torch.distributed.get_world_size())]
+                tensor_list = [torch.empty(tensor_to_send.shape) for i in range(torch.distributed.get_world_size())]
                 torch.distributed.gather(tensor_to_send, gather_list=tensor_list, dst=0, group=None)
-
             else:
                 torch.distributed.gather(tensor_to_send, gather_list=[], dst=0, group=None)
             
