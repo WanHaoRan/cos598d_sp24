@@ -141,7 +141,6 @@ def train(args, train_dataset, model, tokenizer):
                 scheduler.step()  # Update learning rate schedule
                 ##################################################
                 # TODO(cos598d): perform a single optimization step (parameter update) by invoking the optimizer
-                optimizer.zero_grad()
                 optimizer.step()
                 ##################################################
                 model.zero_grad()
