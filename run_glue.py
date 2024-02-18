@@ -381,6 +381,8 @@ def main():
     label_list = processor.get_labels()
     num_labels = len(label_list)
 
+    torch.distributed.init_process_group(backend='gloo', init_method="tcp://10.10.1.1:12345", timeout=None, world_size=4, rank=args.local_rank)
+
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
@@ -397,8 +399,6 @@ def main():
         args.model_name_or_path,
         config=config)
     ##################################################
-
-    torch.distributed.init_process_group(backend='gloo', init_method="tcp://10.10.1.1:12345", timeout=None, world_size=4, rank=args.local_rank)
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
