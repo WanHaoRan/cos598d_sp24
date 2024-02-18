@@ -138,7 +138,17 @@ def train(args, train_dataset, model, tokenizer):
                 loss.backward()
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
-            print(model.parameters().grad())
+            
+            tensor_to_send = torch.tensor([args.local_rank], dtype=torch.int)
+            if args.local_rank == 0:
+                tensor_list = [torch.empty(1) for i in range(torch.distributed.get_world_size())]
+                torch.distributed.gather(tensor_to_send, gather_list=tensor_list, dst=0, group=None)
+
+            else:
+                torch.distributed.gather(tensor_to_send, gather_list=[], dst=0, group=None)
+            
+            if args.local_rank == 0:
+                print(f"[{args.local_rank}] data = {tensor_list}")
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
