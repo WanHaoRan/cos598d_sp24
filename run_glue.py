@@ -183,7 +183,7 @@ def train(args, train_dataset, model, tokenizer):
             toc = time.perf_counter()
             if(step != 0):
                 time_each_iteration.append(toc-tic)
-                print("Time for step {}: {}".format(step, toc-tic))
+            print("Time for step {}: {}".format(step, toc-tic))
 
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
