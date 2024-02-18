@@ -132,7 +132,7 @@ def train(args, train_dataset, model, tokenizer):
             else:
                 ##################################################
                 # TODO(cos598d): perform backward pass here
-                
+                loss.backward()
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
@@ -141,7 +141,8 @@ def train(args, train_dataset, model, tokenizer):
                 scheduler.step()  # Update learning rate schedule
                 ##################################################
                 # TODO(cos598d): perform a single optimization step (parameter update) by invoking the optimizer
-                
+                optimizer.zero_grad()
+                optimizer.step()
                 ##################################################
                 model.zero_grad()
                 global_step += 1
@@ -155,6 +156,8 @@ def train(args, train_dataset, model, tokenizer):
         
         ##################################################
         # TODO(cos598d): call evaluate() here to get the model performance after every epoch.
+        with torch.no_grad():
+            evaluate(args, model, tokenizer)
 
         ##################################################
 
@@ -388,7 +391,9 @@ def main():
     ##################################################
     # TODO(cos598d): load the model using from_pretrained. Remember to pass in `config` as an argument.
     # If you pass in args.model_name_or_path (e.g. "bert-base-cased"), the model weights file will be downloaded from HuggingFace.
-
+    model = model_class.from_pretrained(
+        args.model_name_or_path,
+        config=config)
     ##################################################
 
     if args.local_rank == 0:
