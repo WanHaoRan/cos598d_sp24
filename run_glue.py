@@ -159,7 +159,7 @@ def train(args, train_dataset, model, tokenizer):
                         tensor_list = [tensor_to_recv for i in range(torch.distributed.get_world_size())]
                         torch.distributed.scatter(tensor_to_recv, tensor_list, src=0)
                     else:
-                        torch.distributed.scatter(param, scatter_list=[], src=0, group=None)
+                        torch.distributed.scatter(tensor_to_recv, scatter_list=[], src=0, group=None)
                     
                     param.grad = tensor_to_recv
                     print(param.grad)
