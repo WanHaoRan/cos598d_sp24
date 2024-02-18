@@ -398,7 +398,7 @@ def main():
         config=config)
     ##################################################
 
-    torch.distributed.init_process_group(backend='gloo', init_method="tcp://10.10.1.1:12345", timeout=None, rank=args.local_rank)
+    torch.distributed.init_process_group(backend='gloo', init_method="tcp://10.10.1.1:12345", timeout=None, word_size=4, rank=args.local_rank)
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
