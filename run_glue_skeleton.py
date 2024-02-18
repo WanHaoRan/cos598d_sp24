@@ -156,8 +156,7 @@ def train(args, train_dataset, model, tokenizer):
         
         ##################################################
         # TODO(cos598d): call evaluate() here to get the model performance after every epoch.
-        with torch.no_grad():
-            evaluate(args, model, tokenizer)
+        evaluate(args, model, tokenizer)
 
         ##################################################
 
