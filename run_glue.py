@@ -22,6 +22,8 @@ import glob
 import logging
 import os
 import random
+import time
+import copy
 
 import numpy as np
 import torch
@@ -113,9 +115,12 @@ def train(args, train_dataset, model, tokenizer):
     model.zero_grad()
     train_iterator = trange(int(args.num_train_epochs), desc="Epoch", disable=args.local_rank not in [-1, 0])
     set_seed(args)  # Added here for reproductibility (even between python 2 and 3)
+
+    time_each_iteration = []
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
+            tic = time.perf_counter()
             model.train()
             batch = tuple(t.to(args.device) for t in batch)
             inputs = {'input_ids':      batch[0],
@@ -139,19 +144,28 @@ def train(args, train_dataset, model, tokenizer):
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
             
-            # Gather data to rank=0 node
-            tensor_to_send = model.parameters()
-            for param in tensor_to_send:
-                print(type(param), param.grad)
+                # Gather data to rank=0 node
+                model_params = model.parameters()
+                for param in model_params:
+                    tensor_to_send = copy.deepcopy(param.grad)
+                    if args.local_rank == 0:
+                        tensor_list = [torch.empty(tensor_to_send.shape) for i in range(torch.distributed.get_world_size())]
+                        torch.distributed.gather(tensor_to_send, gather_list=tensor_list, dst=0, group=None)
+                    else:
+                        torch.distributed.gather(tensor_to_send, gather_list=[], dst=0, group=None)
 
-            if args.local_rank == 0:
-                tensor_list = [torch.empty(tensor_to_send.shape) for i in range(torch.distributed.get_world_size())]
-                torch.distributed.gather(tensor_to_send, gather_list=tensor_list, dst=0, group=None)
-            else:
-                torch.distributed.gather(tensor_to_send, gather_list=[], dst=0, group=None)
-            
-            if args.local_rank == 0:
-                print(f"[{args.local_rank}] data = {tensor_list}")
+                    tensor_to_recv = torch.empty(param.grad.shape)
+
+                    if args.local_rank == 0:
+                        new_grad = torch.mean(tensor_list)
+                        tensor_to_recv = copy.deepcopy(new_grad)
+                        tensor_list = [tensor_to_recv for i in range(torch.distributed.get_world_size())]
+                        torch.distributed.scatter(tensor_to_recv, tensor_list, src=0)
+                    else:
+                        torch.distributed.scatter(param, scatter_list=[], src=0, group=None)
+                    
+                    param.grad.copy_(tensor_to_recv)
+                    
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
@@ -166,16 +180,24 @@ def train(args, train_dataset, model, tokenizer):
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
                 break
+
+            toc = time.perf_counter()
+            if(step != 0 or batch > 0):
+                time_each_iteration.append(toc-tic)
+                print("Time for step {}: {}".format(step, toc-tic))
+
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
             break
-        
+
         ##################################################
         # TODO(cos598d): call evaluate() here to get the model performance after every epoch.
         evaluate(args, model, tokenizer)
-
         ##################################################
-
+    logger.info("***** Finished training *****")
+    logger.info("Total number of steps: %d", len(time_each_iteration)+1)
+    logger.info("Average time for each step: %f", np.mean(time_each_iteration))
+    
     return global_step, tr_loss / global_step
 
 
