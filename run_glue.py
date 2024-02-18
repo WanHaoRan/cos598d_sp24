@@ -71,7 +71,10 @@ def train(args, train_dataset, model, tokenizer):
     """ Train the model """
 
     args.train_batch_size = args.per_gpu_train_batch_size
-    train_sampler = RandomSampler(train_dataset)
+
+    is_distributed = torch.distributed.is_initialized()
+    train_sampler = DistributedSampler(train_dataset) if is_distributed else None
+    # train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
 
     if args.max_steps > 0:
@@ -135,6 +138,7 @@ def train(args, train_dataset, model, tokenizer):
                 loss.backward()
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
+            print(model.parameters().grad())
 
             tr_loss += loss.item()
             if (step + 1) % args.gradient_accumulation_steps == 0:
@@ -393,6 +397,8 @@ def main():
         args.model_name_or_path,
         config=config)
     ##################################################
+
+    torch.distributed.init_process_group(backend='gloo', init_method="tcp://10.10.1.1:12345", timeout=None)
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
