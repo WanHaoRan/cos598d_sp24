@@ -181,7 +181,7 @@ def train(args, train_dataset, model, tokenizer):
                 break
 
             toc = time.perf_counter()
-            if(step != 0 or batch > 0):
+            if(step != 0):
                 time_each_iteration.append(toc-tic)
                 print("Time for step {}: {}".format(step, toc-tic))
 
