@@ -143,24 +143,14 @@ def train(args, train_dataset, model, tokenizer):
                 loss.backward()
                 # Gather data to rank=0 node
                 for param in model.parameters():
-                    tensor_to_send = copy.deepcopy(param.grad)
-                    if args.local_rank == 0:
-                        tensor_list = [torch.empty(tensor_to_send.shape) for i in range(torch.distributed.get_world_size())]
-                        torch.distributed.gather(tensor_to_send, gather_list=tensor_list, dst=0, group=None)
-                    else:
-                        torch.distributed.gather(tensor_to_send, gather_list=[], dst=0, group=None)
+                    tensor_to_reduce = copy.deepcopy(param.grad)
 
-                    tensor_to_recv = torch.empty(param.grad.shape)
+                    torch.distributed.all_reduce(tensor_to_reduce, op=torch.distributed.ReduceOp.SUM, group=None)
 
-                    if args.local_rank == 0:
-                        new_grad = torch.mean(torch.stack([tensor_list[i] for i in range(torch.distributed.get_world_size())], dim=0), dim=0, keepdim=False)
-                        tensor_to_recv = copy.deepcopy(new_grad)
-                        tensor_list = [tensor_to_recv for i in range(torch.distributed.get_world_size())]
-                        torch.distributed.scatter(tensor_to_recv, tensor_list, src=0)
-                    else:
-                        torch.distributed.scatter(tensor_to_recv, scatter_list=[], src=0, group=None)
-                    
-                    param.grad = tensor_to_recv
+                    tensor_to_reduce = tensor_to_reduce / torch.distributed.get_world_size()
+
+                    param.grad = tensor_to_reduce
+
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                     
