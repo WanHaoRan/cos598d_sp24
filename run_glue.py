@@ -383,8 +383,15 @@ def main():
     parser.add_argument('--fp16_opt_level', type=str, default='O1',
                         help="For fp16: Apex AMP optimization level selected in ['O0', 'O1', 'O2', and 'O3']."
                              "See details at https://nvidia.github.io/apex/amp.html")
+    
     parser.add_argument("--local_rank", type=int, default=-1,
                         help="For distributed training: local_rank. If single-node training, local_rank defaults to -1.")
+    parser.add_argument("--world_size", type=int, default=-1,
+                        help="For distributed training: world_size. If single-node training, world_size defaults to -1.")
+    parser.add_argument("--master_ip", type=str, default=-1,
+                        help="For distributed training: master node's ip address.")
+    parser.add_argument("--master_port", type=int, default=-1,
+                        help="For distributed training: master node's port.")
     args = parser.parse_args()
 
     if os.path.exists(args.output_dir) and os.listdir(args.output_dir) and args.do_train and not args.overwrite_output_dir:
@@ -413,7 +420,7 @@ def main():
     label_list = processor.get_labels()
     num_labels = len(label_list)
 
-    torch.distributed.init_process_group(backend='gloo', init_method="tcp://10.10.1.1:12345", timeout=None, world_size=4, rank=args.local_rank)
+    torch.distributed.init_process_group(backend='gloo', init_method="tcp://"+args.master_ip+":"+str(args.master_port), timeout=None, world_size=args.world_size, rank=args.local_rank)
 
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:
