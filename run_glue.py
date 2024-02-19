@@ -48,6 +48,8 @@ from pytorch_transformers import AdamW, WarmupLinearSchedule
 from utils_glue import (compute_metrics, convert_examples_to_features,
                         output_modes, processors)
 
+from torch.nn.parallel import DistributedDataParallel as DDP
+
 logger = logging.getLogger(__name__)
 
 ALL_MODELS = sum((tuple(conf.pretrained_config_archive_map.keys()) for conf in (BertConfig, XLNetConfig, XLMConfig, RobertaConfig)), ())
@@ -76,7 +78,6 @@ def train(args, train_dataset, model, tokenizer):
 
     is_distributed = torch.distributed.is_initialized()
     train_sampler = DistributedSampler(train_dataset) if is_distributed else None
-    # train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.train_batch_size)
 
     if args.max_steps > 0:
@@ -141,16 +142,6 @@ def train(args, train_dataset, model, tokenizer):
                 ##################################################
                 # TODO(cos598d): perform backward pass here
                 loss.backward()
-                # Gather data to rank=0 node
-                for param in model.parameters():
-                    tensor_to_reduce = copy.deepcopy(param.grad)
-
-                    torch.distributed.all_reduce(tensor_to_reduce, op=torch.distributed.ReduceOp.SUM, group=None)
-
-                    tensor_to_reduce = tensor_to_reduce / torch.distributed.get_world_size()
-
-                    param.grad = tensor_to_reduce
-
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                     
@@ -411,7 +402,8 @@ def main():
     label_list = processor.get_labels()
     num_labels = len(label_list)
 
-    torch.distributed.init_process_group(backend='gloo', init_method="tcp://"+args.master_ip+":"+str(args.master_port), timeout=None, world_size=args.world_size, rank=args.local_rank)
+    torch.distributed.init_process_group(backend='gloo', init_method="tcp://"+args.master_ip+":"+str(args.master_port), 
+                                         timeout=None, world_size=args.world_size, rank=args.local_rank)
 
     # Load pretrained model and tokenizer
     if args.local_rank not in [-1, 0]:
@@ -429,6 +421,7 @@ def main():
         args.model_name_or_path,
         config=config)
     ##################################################
+    ddp_model = DDP(model, device_ids=[args.local_rank])
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
@@ -441,7 +434,7 @@ def main():
     # Training
     if args.do_train:
         train_dataset = load_and_cache_examples(args, args.task_name, tokenizer, evaluate=False)
-        global_step, tr_loss = train(args, train_dataset, model, tokenizer)
+        global_step, tr_loss = train(args, train_dataset, ddp_model, tokenizer)
         logger.info(" global_step = %s, average loss = %s", global_step, tr_loss)
 
     # Evaluation
