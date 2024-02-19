@@ -421,12 +421,12 @@ def main():
         args.model_name_or_path,
         config=config)
     ##################################################
-    ddp_model = DDP(model, device_ids=[args.local_rank], output_device=args.local_rank)
 
     if args.local_rank == 0:
         torch.distributed.barrier()  # Make sure only the first process in distributed training will download model & vocab
 
     model.to(args.device)
+    ddp_model = DDP(model)
 
     logger.info("Training/evaluation parameters %s", args)
 
