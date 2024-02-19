@@ -117,7 +117,6 @@ def train(args, train_dataset, model, tokenizer):
     set_seed(args)  # Added here for reproductibility (even between python 2 and 3)
 
     time_each_iteration = []
-    data_size = []
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=args.local_rank not in [-1, 0])
         for step, batch in enumerate(epoch_iterator):
@@ -143,17 +142,12 @@ def train(args, train_dataset, model, tokenizer):
                 # TODO(cos598d): perform backward pass here
                 loss.backward()
                 # Gather data to rank=0 node
-                data_iter = 0
                 for param in model.parameters():
                     nof_data = 1
                     tensor_to_reduce = copy.deepcopy(param.grad)
-                    for i in range(len(param.grad.shape)):
-                        nof_data *= param.grad.shape[i]
-                        data_iter += nof_data * 32
                     torch.distributed.all_reduce(tensor_to_reduce, op=torch.distributed.ReduceOp.SUM, group=None)
                     tensor_to_reduce = tensor_to_reduce / torch.distributed.get_world_size()
                     param.grad = tensor_to_reduce
-                data_size.append(data_iter)
                 ##################################################
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
                     
@@ -187,8 +181,6 @@ def train(args, train_dataset, model, tokenizer):
     logger.info("***** Finished training *****")
     logger.info("Total number of steps: %d", len(time_each_iteration)+1)
     logger.info("Average time for each step: %f", np.mean(time_each_iteration))
-
-    print(np.sum(data_size))
 
     return global_step, tr_loss / global_step
 
