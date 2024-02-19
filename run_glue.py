@@ -143,7 +143,6 @@ def train(args, train_dataset, model, tokenizer):
                 loss.backward()
                 # Gather data to rank=0 node
                 for param in model.parameters():
-                    nof_data = 1
                     tensor_to_reduce = copy.deepcopy(param.grad)
                     torch.distributed.all_reduce(tensor_to_reduce, op=torch.distributed.ReduceOp.SUM, group=None)
                     tensor_to_reduce = tensor_to_reduce / torch.distributed.get_world_size()
