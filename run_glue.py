@@ -149,7 +149,6 @@ def train(args, train_dataset, model, tokenizer):
                     tensor_to_reduce = copy.deepcopy(param.grad)
                     for i in range(len(param.grad.shape)):
                         nof_data *= param.grad.shape[i]
-                        print(param.grad.dtype)
                         data_iter += nof_data * 32
                     torch.distributed.all_reduce(tensor_to_reduce, op=torch.distributed.ReduceOp.SUM, group=None)
                     tensor_to_reduce = tensor_to_reduce / torch.distributed.get_world_size()
